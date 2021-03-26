@@ -1,13 +1,8 @@
 const nft = artifacts.require("NFT");
 const { PRICE, NAME, VERSION } = require('../nft.config.js');
 
-/*
- * uncomment accounts to access the test accounts made available by the
- * Ethereum client
- * See docs: https://www.trufflesuite.com/docs/truffle/testing/writing-tests-in-javascript
- */
 contract("nft", function (accounts) {
-  const [admin, user1, user2, user3] = accounts;
+  const [admin, user1, user2, user3, user4, user5] = accounts;
   it("should assert true", async function () {
     await nft.deployed();
     return assert.isTrue(true);
@@ -35,13 +30,48 @@ contract("nft", function (accounts) {
     expect(version).to.equal(VERSION);
   });
 
-  it('mints new nft when paid exact price', async () => {
+  it('mintToken creates new token, updates ownership and balances, emits logs', async () => {
     const newNFT = 'Test NFT';
     const instance = await nft.deployed();
-    const { logs: { '0': { args } } } = await instance.mintToken.call(newNFT);
+
+    // mint new token and get logs
+    const { logs: { '0': { args } } } = await instance.mintToken(newNFT, { from: admin, value: PRICE }).catch(err => console.log(err));
+
+    // check log
     expect(args._owner).to.equal(admin);
     expect(args._name).to.equal(newNFT);
-    console.log(args._id);
-  })
+    const { _tokenId } = args;
+    
+    //check owner of token and balance of sender
+    const _owner = await instance.ownerOf.call(parseInt(_tokenId));
+    const _balance = (await instance.balanceOf.call(admin)).toNumber();
+    expect(_owner).to.equal(admin);
+    expect(_balance).to.equal(1);
+
+  });
+
+  it('safeTransfers from owner to recipient', async () => {
+    const transferNFT = 'TransferNFT';
+    const instance = await nft.deployed();
+    // make new token and get token
+    const mintLogs = await instance.mintToken(transferNFT, { from: user1, value: PRICE } ).catch(err => console.log(err));
+    const mintId = mintLogs.logs[0].args._tokenId.toNumber();
+    //transfer coin and get logs
+    const { logs: { '0': { args } } } = await instance.safeTransferFrom(user1, user2, mintId, { from: user1 });
+    const { _from, _to } = args;
+    expect(_from).to.equal(user1);
+    expect(_to).to.equal(user2);
+
+    // get all balances
+    const senderBalance = (await instance.balanceOf.call(user1)).toNumber();
+    const recipientBalance = (await instance.balanceOf.call(user2)).toNumber();
+    const owner = await instance.ownerOf.call(mintId);
+
+    // assert balances
+    expect(senderBalance).to.equal(0);
+    expect(recipientBalance).to.equal(1);
+    expect(owner).to.equal(user2);
+
+  });
 
 });
