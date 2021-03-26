@@ -3,7 +3,7 @@ pragma solidity >=0.4.22 <0.9.0;
 contract NFT {
     string public name;
     string public version;
-    uint256 private count = 0;
+    uint256 private count = 1;
     uint256 public price;
     address private admin;
     bool public paused = false;
@@ -12,12 +12,12 @@ contract NFT {
       uint256 id;
       string tokenName;
       address owner;
-      address approved;
     }
 
     mapping (uint256 => Token) Tokens;
-    mapping (address => mapping (uint256 => Token)) Ownership;
     mapping (address => uint256) Balances;
+    mapping (uint256 => address) Approvals;
+    mapping (address => mapping(address => bool)) FullApprovals;
 
     constructor(address payable _owner, string memory _name, string memory _version, uint256 _price) public {
       name = _name;
@@ -43,14 +43,26 @@ contract NFT {
   ///  The operator can manage all NFTs of the owner.
   event ApprovalForAll(address indexed _owner, address indexed _operator, bool _approved);
 
+  event TokenMinted(address indexed _owner, string _name, uint256 _tokenId);
+
   modifier onlyAdmin {
     require(msg.sender == admin, "Unathorized");
     _;
   }
 
+  modifier onlyOwner (uint256 _tokenId) {
+    require(Tokens[_tokenId].owner == address(msg.sender), "This is not your Token");
+    _;
+  }
+
+  modifier isValidToken (uint256 _tokenId) {
+    require(Tokens[_tokenId].id != 0, "Invalid Token");
+    _;
+  }
+
   function isAdmin() public onlyAdmin returns(bool) {
     return true;
-  }
+  }  
 
   function mintToken(string memory _name) public payable {
     require(msg.value >= price, "Insufficient payment to mint new Token");
@@ -59,9 +71,9 @@ contract NFT {
     uint256 id = count;
     count++;
     Balances[address(msg.sender)]++;
-    Token memory newToken = Token(id, _name, address(msg.sender), address(0));
+    Token memory newToken = Token(id, _name, address(msg.sender));
     Tokens[id] = newToken;
-    Ownership[address(msg.sender)][id] = newToken;
+    emit TokenMinted(address(msg.sender), _name, id);
   }
 
   /// @notice Count all NFTs assigned to an owner
@@ -74,14 +86,10 @@ contract NFT {
     return Balances[_owner];
   }
 
-  /// @notice Find the owner of an NFT
-  /// @dev NFTs assigned to zero address are considered invalid, and queries
-  ///  about them do throw.
-  /// @param _tokenId The identifier for an NFT
+  /// _tokenId The identifier for an NFT
   /// @return The address of the owner of the NFT
   function ownerOf(uint256 _tokenId) external view returns (address _owner) {
-    _owner = Tokens[_tokenId].owner;
-    return _owner;
+    return Tokens[_tokenId].owner;
   }
 
   /// @notice Transfers the ownership of an NFT from one address to another address
@@ -95,19 +103,12 @@ contract NFT {
   /// @param _from The current owner of the NFT
   /// @param _to The new owner
   /// @param _tokenId The NFT to transfer
-  /// @param data Additional data with no specified format, sent in call to `_to`
-  function safeTransferFrom(address _from, address _to, uint256 _tokenId, bytes calldata data) external payable {
-
-  }
-
-  /// @notice Transfers the ownership of an NFT from one address to another address
-  /// @dev This works identically to the other function with an extra data parameter,
-  ///  except this function just sets data to "".
-  /// @param _from The current owner of the NFT
-  /// @param _to The new owner
-  /// @param _tokenId The NFT to transfer
-  function safeTransferFrom(address _from, address _to, uint256 _tokenId) external payable {
-
+  function safeTransferFrom(address _from, address _to, uint256 _tokenId) public payable onlyOwner(_tokenId) isValidToken(_tokenId) {
+    Balances[_from]--;
+    Balances[_to]++;
+    Tokens[_tokenId].owner = _to;
+    Approvals[_tokenId] = address(0);
+    emit Transfer(_from, _to, _tokenId);
   }
 
   /// @notice Transfer ownership of an NFT -- THE CALLER IS RESPONSIBLE
