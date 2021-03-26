@@ -6,6 +6,7 @@ contract NFT {
     uint256 private count = 0;
     uint256 public price;
     address private admin;
+    bool public paused = false;
 
     struct Token {
       uint256 id;
@@ -18,10 +19,11 @@ contract NFT {
     mapping (address => mapping (uint256 => Token)) Ownership;
     mapping (address => uint256) Balances;
 
-    constructor(string memory _name, string memory _version) {
+    constructor(address payable _owner, string memory _name, string memory _version, uint256 _price) public {
       name = _name;
       version = _version;
-      admin = msg.sender;
+      admin = _owner;
+      price = _price;
     }
 
   /// @dev This emits when ownership of any NFT changes by any mechanism.
@@ -41,11 +43,20 @@ contract NFT {
   ///  The operator can manage all NFTs of the owner.
   event ApprovalForAll(address indexed _owner, address indexed _operator, bool _approved);
 
-  function mintToken(string memory _name) public payable returns(uint256 id) {
+  modifier onlyAdmin {
+    require(msg.sender == admin, "Unathorized");
+    _;
+  }
+
+  function isAdmin() public onlyAdmin returns(bool) {
+    return true;
+  }
+
+  function mintToken(string memory _name) public payable {
     require(msg.value >= price, "Insufficient payment to mint new Token");
     require(msg.value == price, "Exact payment required");
     require(Balances[address(msg.sender)] + 1 > Balances[address(msg.sender)], "Overflow error");
-    id = count;
+    uint256 id = count;
     count++;
     Balances[address(msg.sender)]++;
     Token memory newToken = Token(id, _name, address(msg.sender), address(0));
@@ -68,8 +79,9 @@ contract NFT {
   ///  about them do throw.
   /// @param _tokenId The identifier for an NFT
   /// @return The address of the owner of the NFT
-  function ownerOf(uint256 _tokenId) external view returns (address) {
-    
+  function ownerOf(uint256 _tokenId) external view returns (address _owner) {
+    _owner = Tokens[_tokenId].owner;
+    return _owner;
   }
 
   /// @notice Transfers the ownership of an NFT from one address to another address
@@ -84,7 +96,7 @@ contract NFT {
   /// @param _to The new owner
   /// @param _tokenId The NFT to transfer
   /// @param data Additional data with no specified format, sent in call to `_to`
-  function safeTransferFrom(address _from, address _to, uint256 _tokenId, bytes memory data) external payable {
+  function safeTransferFrom(address _from, address _to, uint256 _tokenId, bytes calldata data) external payable {
 
   }
 
