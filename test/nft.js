@@ -50,12 +50,18 @@ contract("nft", function (accounts) {
 
   });
 
-  it('safeTransfers from owner to recipient', async () => {
+  it('safeTransfers only from owner to recipient', async () => {
     const transferNFT = 'TransferNFT';
     const instance = await nft.deployed();
     // make new token and get token
     const mintLogs = await instance.mintToken(transferNFT, { from: user1, value: PRICE } ).catch(err => console.log(err));
+
     const mintId = mintLogs.logs[0].args._tokenId.toNumber();
+    
+    // try sending from wrong address
+    const error = await instance.safeTransferFrom(admin, user2, mintId, { from: admin } ).catch(() => true);
+    expect(error).to.equal(true);
+
     //transfer coin and get logs
     const { logs: { '0': { args } } } = await instance.safeTransferFrom(user1, user2, mintId, { from: user1 });
     const { _from, _to } = args;
@@ -71,6 +77,20 @@ contract("nft", function (accounts) {
     expect(senderBalance).to.equal(0);
     expect(recipientBalance).to.equal(1);
     expect(owner).to.equal(user2);
+
+  });
+
+  it('sets approval and operators for tokens and allows transfer', async () => {
+    const instance = await nft.deployed();
+    // make new tokens and get ids
+    const newNFT = 'approval test';
+    const newerNFT = 'operator test';
+    const minted1 = await instance.mintToken(newNFT, { from: user1, value: PRICE});
+    const minted2 = await instance.mintToken(newerNFT, { from: user1, value: PRICE});
+    const nft1Id = parseInt(minted1.logs[0].args._tokenId);
+    const nft2Id = parseInt(minted2.logs[0].args._tokenId);
+     // set approval and operator status
+     
 
   });
 
